@@ -22,12 +22,22 @@
 #      separate RNA-FM env; RNA-FM.sh should just inherit whichever env
 #      called it.
 #   7. Verify GPU + `fm` import work in the env.
-#   8. Optionally run a smoke-test inference on data/example.fa (RUN_INFER=1, default).
+#   8. Optionally set up the off-target toolchain (PITA + TargetScan), which
+#      needs `apt-get install` privileges (SETUP_OFFTARGET=1, default off).
+#      PITA bundles its own ViennaRNA-1.6 binaries under off-target/pita/Bin —
+#      no system ViennaRNA needed, just `make install` to resolve the
+#      EXE_BASE_DIR placeholder and chmod the binaries executable.
+#      TargetScan needs the CPAN modules Bio::TreeIO + Statistics::Lite,
+#      installed here via apt (libbio-perl-perl, libstatistics-lite-perl) —
+#      no PERL5LIB needed, they land in perl's system @INC.
+#   9. Optionally run a smoke-test inference on data/example.fa (RUN_INFER=1,
+#      default). Includes -off -tox when SETUP_OFFTARGET=1.
 #
 # Usage:
-#   bash setup_autodl_singleenv.sh              # full setup + smoke-test inference
-#   RUN_INFER=0 bash setup_autodl_singleenv.sh   # setup only, skip the test inference
-#   ENV_NAME=myenv bash setup_autodl_singleenv.sh  # use a different env name
+#   bash setup_autodl_singleenv.sh                    # full setup + smoke-test inference
+#   RUN_INFER=0 bash setup_autodl_singleenv.sh         # setup only, skip the test inference
+#   ENV_NAME=myenv bash setup_autodl_singleenv.sh      # use a different env name
+#   SETUP_OFFTARGET=1 bash setup_autodl_singleenv.sh   # also set up off-target (PITA+TargetScan)
 #
 set -euo pipefail
 
@@ -35,6 +45,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 RUN_INFER="${RUN_INFER:-1}"
+SETUP_OFFTARGET="${SETUP_OFFTARGET:-0}"
 ENV_NAME="${ENV_NAME:-oligoformer38}"
 RNAFM_WEIGHT="RNA-FM/redevelop/pretrained/RNA-FM_pretrained.pth"
 RNAFM_URL="https://cloud.tsinghua.edu.cn/f/46d71884ee8848b3a958/?dl=1"
@@ -114,15 +125,35 @@ python -c "import torch; print('torch', torch.__version__, 'cuda?', torch.cuda.i
     || die "torch GPU check failed — see error above."
 
 # ---------------------------------------------------------------------------
-# 8. Smoke-test inference
+# 8. Off-target toolchain (PITA + TargetScan) — optional, needs apt privileges
+# ---------------------------------------------------------------------------
+INFER_EXTRA_FLAGS=""
+if [ "$SETUP_OFFTARGET" = "1" ]; then
+    log "Setting up off-target toolchain (PITA + TargetScan)"
+
+    log "Installing TargetScan's perl deps (Bio::TreeIO, Statistics::Lite) via apt"
+    apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get install -y libbio-perl-perl libstatistics-lite-perl
+    perl -MBio::TreeIO -e 1 || die "Bio::TreeIO still not importable after apt install"
+    perl -MStatistics::Lite -e 1 || die "Statistics::Lite still not importable after apt install"
+
+    log "Resolving PITA's EXE_BASE_DIR placeholder and chmod'ing its bundled ViennaRNA-1.6 binaries"
+    ( cd off-target/pita && make install )
+
+    log "Off-target toolchain ready"
+    INFER_EXTRA_FLAGS="-off -tox"
+fi
+
+# ---------------------------------------------------------------------------
+# 9. Smoke-test inference
 # ---------------------------------------------------------------------------
 if [ "$RUN_INFER" = "1" ]; then
-    log "Running smoke-test inference on data/example.fa"
-    python scripts/main.py --infer 1 -i1 data/example.fa
+    log "Running smoke-test inference on data/example.fa ${INFER_EXTRA_FLAGS}"
+    python scripts/main.py --infer 1 -i1 data/example.fa $INFER_EXTRA_FLAGS
     log "Done. Check the 'result/' directory for output."
 else
     log "Setup complete. To run inference:"
     echo "    conda activate $ENV_NAME"
-    echo "    python scripts/main.py --infer 1 -i1 data/example.fa"
+    echo "    python scripts/main.py --infer 1 -i1 data/example.fa $INFER_EXTRA_FLAGS"
 fi
 conda deactivate
