@@ -15,6 +15,31 @@ Two **separate** conda environments are required:
 
 A GPU + driver is expected for training and inference.
 
+## Local checkout vs cloud box
+
+Code is edited in this local checkout; training and inference run on the AutoDL
+GPU box (`ssh oligo`, RTX 4090 D) at `/root/autodl-tmp/OligoFormer-fixed`.
+
+Only code, configs, small datasets (`data/*.csv`, `data/fasta/`), checkpoints and
+experiment summaries are local. These stay cloud-side and are gitignored, because
+they are multi-GB or regenerated per run:
+`data/RNAFM/`, `data/RiNALMo/`, `data/RiNALMo650/`, `data/infer/`, `result/`,
+`RNA-FM/redevelop/pretrained/`.
+
+`./remote.sh` drives that split:
+
+```bash
+./remote.sh push                            # send local edits up
+./remote.sh infer 1 -i1 data/example.fa     # run inference on the GPU
+./remote.sh run python scripts/main.py --datasets Hu Mix --cuda 0   # any command
+./remote.sh ls-result                       # what the remote produced
+./remote.sh pull-result <name>              # fetch one run dir / output file
+./remote.sh shell                           # interactive shell, env already active
+```
+
+The remote conda env is `oligoformer38` (not `oligoformer`); `RNA-FM` and `rinalmo`
+are separate envs there. Push before running, or the box runs stale code.
+
 ## Common commands
 
 All commands are run from the repo root with the `oligoformer` env active.
