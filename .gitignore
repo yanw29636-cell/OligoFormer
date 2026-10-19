@@ -160,16 +160,16 @@ cython_debug/
 #.idea/
 
 # Vendored RNA-FM foundation model (1.2GB weight; download via setup_autodl.sh)
-RNA-FM/
+RNA-FM
 
 # ---- Cloud-only artifacts (live on AutoDL at /root/autodl-tmp/OligoFormer-fixed) ----
 # Precomputed embeddings / features (several GB) - regenerate or keep remote
-data/RNAFM/
-data/RiNALMo/
-data/RiNALMo650/
-data/infer/
+data/RNAFM
+data/RiNALMo
+data/RiNALMo650
+data/infer
 # Training / inference run outputs (2.7GB remote)
-result/
+result
 # RNA-FM pretrained weights (1.2GB); vendored code is kept
 RNA-FM/redevelop/pretrained/
 
