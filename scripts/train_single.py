@@ -71,6 +71,7 @@ class AverageMeter(object):
         return self.avg
 
 def val(model, criterion, dataloader):
+	model.eval()
 	running_loss = AverageMeter()
 	pred_list = []
 	pred_cls_list = []
@@ -109,6 +110,7 @@ def val(model, criterion, dataloader):
 	mcc=matthews_corrcoef(label,pred_cls)
 	epoch_loss = running_loss.get_average()
 	running_loss.reset()
+	model.train()
 	return epoch_loss, acc, sen, spe, pre, rec, f1score, rocauc, prauc, mcc, label, pred, pd.concat((pd.Series(fpr),pd.Series(tpr)),axis = 1) , pd.concat((pd.Series(precision),pd.Series(recall)),axis = 1)
 
 def train_single(Args):
@@ -116,6 +118,8 @@ def train_single(Args):
 	random.seed(Args.seed)
 	os.environ['PYTHONHASHSEED']=str(Args.seed)
 	np.random.seed(Args.seed)
+	torch.manual_seed(Args.seed)
+	torch.cuda.manual_seed_all(Args.seed)
 	params = dict(
 		data_root=Args.path,
 		save_dir=Args.output_dir,
@@ -123,9 +127,13 @@ def train_single(Args):
 		batch_size=Args.batch_size
 	)
 	logger = TrainLogger(params)
-	dataset = pd.read_csv(Args.path + Args.datasets[0] + '.csv', dtype=str) 
+	dataset = pd.read_csv(Args.path + Args.datasets[0] + '.csv', dtype=str)
 	dataset = shuffle_dataset(dataset, Args.seed)
 	test_df = pd.read_csv(Args.path + Args.datasets[1] + '.csv', dtype=str)
+	if Args.relabel_median:
+		for df in (dataset, test_df):
+			labels = df['label'].astype(float)
+			df['y'] = (labels > labels.median()).astype(int).astype(str)
 	for i_fold in range(Args.kfold):
 		logger.info('*' * 50 + 'No.' + str(i_fold) + '-fold' + '*' * 50)
 		train_df, valid_df = get_kfold_data_2(i_fold, dataset, Args.kfold)

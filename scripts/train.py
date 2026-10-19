@@ -27,17 +27,27 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
 def find_metrics_best_for_shuffle(label, prob, cut_spe=0.95):
-    fpr, tpr, _ = roc_curve(label, prob)
+    fpr, tpr, thresholds = roc_curve(label, prob)
     a = 1 - fpr
     b = tpr
     Sensitivity = b
     Specificity = a
-    Sensitivity_ = Sensitivity[Specificity >= cut_spe]
+    mask = Specificity >= cut_spe
+    Sensitivity_ = Sensitivity[mask]
     if (len(Sensitivity_) == 1) & (Sensitivity_[0] == 0):
         Sensitivity_best = ((Sensitivity[1] - Sensitivity[0]) / (Specificity[1] - Specificity[0])) * cut_spe + Sensitivity[1] - ((Sensitivity[1] - Sensitivity[0]) / (Specificity[1] - Specificity[0])) *  Specificity[1]
+        best_threshold = thresholds[1]
     else:
-        Sensitivity_best = np.max(Sensitivity_)
-    return Sensitivity_best, Sensitivity, Specificity
+        best_idx = np.argmax(Sensitivity_)
+        Sensitivity_best = Sensitivity_[best_idx]
+        best_threshold = thresholds[np.where(mask)[0][best_idx]]
+    return Sensitivity_best, Sensitivity, Specificity, best_threshold
+
+def find_best_f1_threshold(label, prob):
+    precision, recall, thresholds = precision_recall_curve(label, prob)
+    f1_scores = 2 * precision[:-1] * recall[:-1] / (precision[:-1] + recall[:-1] + 1e-12)
+    best_idx = np.argmax(f1_scores)
+    return thresholds[best_idx]
 
 def get_kfold_data_2(i, datasets, k=5, v=1):
     datasets = shuffle_dataset(datasets, 42).reset_index(drop=True)
@@ -123,9 +133,9 @@ class AverageMeter(object):
         return self.avg
 
 def val(model, criterion, dataloader):
+	model.eval()
 	running_loss = AverageMeter()
 	pred_list = []
-	pred_cls_list = []
 	label_list = []
 	for i, data in enumerate(dataloader):
 		siRNA = data[0].to(device)
@@ -134,20 +144,21 @@ def val(model, criterion, dataloader):
 		mRNA_FM = data[3].to(device)
 		label = data[4].to(device)
 		td = data[6].to(device)
+		y = data[5].to(device)
 		pred,_,_ = model(siRNA,mRNA,siRNA_FM,mRNA_FM,td)
-		loss = criterion(pred[:,1],label.float())
+		loss = criterion(torch.log(pred.clamp(min=1e-8)), y.long())
 		label = data[5]
-		pred_cls = torch.argmax(pred, dim=-1)
 		pred_prob = F.softmax(pred, dim=-1) # pred_prob = pred #
 		pred_prob, indices = torch.max(pred_prob, dim=-1)
 		pred_prob[indices == 0] = 1. - pred_prob[indices == 0]
 		pred_list.append(pred_prob.view(-1).detach().cpu().numpy())
-		pred_cls_list.append(pred_cls.view(-1).detach().cpu().numpy())
 		label_list.append(label)
 		running_loss.update(loss, label.shape[0])
 	pred = np.concatenate(pred_list, axis=0)
-	pred_cls = np.concatenate(pred_cls_list, axis=0)
 	label = np.concatenate(label_list, axis=0)
+	# calibrate the decision threshold on this validation set instead of a naive 0.5/argmax cutoff
+	best_threshold = find_best_f1_threshold(label, pred)
+	pred_cls = (pred >= best_threshold).astype(int)
 	acc = accuracy_score(label, pred_cls)
 	sen = sensitivity(label,pred_cls)
 	spe = specificity(label,pred_cls)
@@ -159,6 +170,7 @@ def val(model, criterion, dataloader):
 	mcc=matthews_corrcoef(label,pred_cls)
 	epoch_loss = running_loss.get_average()
 	running_loss.reset()
+	model.train()
 	return epoch_loss, acc, sen, spe, pre, rec, f1score, rocauc, prauc, mcc, label, pred
 
 def train(Args):
@@ -166,9 +178,15 @@ def train(Args):
 	random.seed(Args.seed)
 	os.environ['PYTHONHASHSEED']=str(Args.seed)
 	np.random.seed(Args.seed)
+	torch.manual_seed(Args.seed)
+	torch.cuda.manual_seed_all(Args.seed)
 	train_df = pd.read_csv(Args.path + Args.datasets[0] + '.csv', dtype=str)
 	valid_df = pd.read_csv(Args.path + Args.datasets[1] + '.csv',  dtype=str)
 	test_df = pd.read_csv(Args.path + Args.datasets[1] + '.csv', dtype=str)
+	if Args.relabel_median:
+		for df in (train_df, valid_df, test_df):
+			labels = df['label'].astype(float)
+			df['y'] = (labels > labels.median()).astype(int).astype(str)
 	params = {'batch_size': Args.batch_size,
 			'shuffle': True,
 			'num_workers': 0,
@@ -181,7 +199,7 @@ def train(Args):
 	OFmodel = Oligo(vocab_size = Args.vocab_size, embedding_dim = Args.embedding_dim, lstm_dim = Args.lstm_dim,  n_head = Args.n_head, n_layers = Args.n_layers, lm1 = Args.lm1, lm2 = Args.lm2).to(device)
 	if Args.resume is not None:
 		OFmodel.load_state_dict(torch.load(Args.resume,map_location=device))
-	criterion = nn.MSELoss()
+	criterion = nn.NLLLoss()
 	best_AUC = 0.0
 	best_loss = 1e10
 	best_epoch = 0
@@ -209,9 +227,10 @@ def train(Args):
 			mRNA_FM = data[3].to(device)
 			label = data[4].to(device)
 			td = data[6].to(device)
+			y = data[5].to(device)
 			siRNA.requires_grad = True
 			output, siRNA_attention, mRNA_attention = OFmodel(siRNA,mRNA,siRNA_FM,mRNA_FM,td)
-			loss = criterion(output[:,1],label.float()) 
+			loss = criterion(torch.log(output.clamp(min=1e-8)), y.long())
 			optimizer.zero_grad()
 			loss.backward(retain_graph=True)
 			running_loss.update(loss, output.shape[0])

@@ -161,3 +161,17 @@ cython_debug/
 
 # Vendored RNA-FM foundation model (1.2GB weight; download via setup_autodl.sh)
 RNA-FM/
+
+# Cloud-only artifacts (lived on AutoDL at /root/autodl-tmp)
+data/RNAFM/
+data/RiNALMo/
+data/RiNALMo650/
+data/infer/
+result/
+RNA-FM/redevelop/pretrained/
+off-target/pita/*_pita_results.tab
+
+# Experiment records: keep training logs despite the blanket *.log rule above
+!train_*.log
+!sweep_*.log
+!*/logs/**/*.log

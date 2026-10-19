@@ -69,6 +69,7 @@ class AverageMeter(object):
         return self.avg
 
 def val(model, criterion, dataloader):
+	model.eval()
 	running_loss = AverageMeter()
 	pred_list = []
 	pred_cls_list = []
@@ -122,6 +123,10 @@ def test_single(Args):
 	dataset = pd.read_csv(Args.path + Args.datasets[0] + '.csv', dtype=str)
 	dataset = shuffle_dataset(dataset, Args.seed)
 	test_df = pd.read_csv(Args.path + Args.datasets[1] + '.csv', dtype=str)
+	if Args.relabel_median:
+		for df in (dataset, test_df):
+			labels = df['label'].astype(float)
+			df['y'] = (labels > labels.median()).astype(int).astype(str)
 	for i_fold in range(Args.kfold):
 		logger.info('*' * 50 + 'No.' + str(i_fold) + '-fold' + '*' * 50)
 		train_df, valid_df = get_kfold_data_2(i_fold, dataset, Args.kfold)
