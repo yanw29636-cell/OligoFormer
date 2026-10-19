@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 import torch
@@ -127,6 +128,7 @@ def mismatch(Args):
                 data.iloc[i,2] = 2
             else:
                 data.iloc[i,2] = 3
+        os.makedirs(Args.output_dir + '/result/', exist_ok=True)
         data.to_csv(Args.output_dir + '/result/mismatch.txt',sep='\t',index=False)
 
 

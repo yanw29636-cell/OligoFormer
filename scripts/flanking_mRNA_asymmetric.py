@@ -57,8 +57,9 @@ for FLANK5 in _FLANK5:
                 if res is not None:
                     Hu.iloc[i,-1] = Hu_mRNA.iloc[j,0][(res.span(0)[0] - FLANK5) : (res.span(0)[1] + FLANK3)]
                     count += 1
+                    break
             if count == 0:
-                print(i,j,'here') 
+                print(i,j,'here')
         for i in range(new.shape[0]):
             count = 0
             for j in range(new_mRNA.shape[0]):
@@ -76,8 +77,9 @@ for FLANK5 in _FLANK5:
                 if res is not None:
                     Taka.iloc[i,-1] = Taka_mRNA.iloc[j,0][(res.span(0)[0] - FLANK5) : (res.span(0)[1] + FLANK3)]
                     count += 1
-            if count > 1:
-                print(i,j)
+                    break
+            if count == 0:
+                print(i,j,'here')
         # for i in `ls ./`; do mv $i/*.fa $i/fasta/ ; done
         with open(path + 'flanking_asymmetric/' + str(FLANK5) + '_' + str(FLANK3) + '/fasta/' + 'Hu_mRNA.fa','a') as f:
             for i in range(Hu.shape[0]):
