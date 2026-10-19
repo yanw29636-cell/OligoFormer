@@ -39,6 +39,7 @@ class AverageMeter(object):
 
 
 def val(model, criterion, dataloader):
+	model.eval()
 	running_loss = AverageMeter()
 	pred_list = []
 	pred_cls_list = []
@@ -55,8 +56,8 @@ def val(model, criterion, dataloader):
 		pred,_,_ = model(siRNA,mRNA,siRNA_FM,mRNA_FM,td)
 		_efficacy += list(pred[:,1].detach().cpu().numpy())
 		_label += list(label.float().detach().cpu().numpy())
-		loss = criterion(pred[:,1],label.float()) 
-		label = np.array([int(i > 0.7) for i in label])
+		loss = criterion(pred[:,1],label.float())
+		label = data[5]
 		pred_cls = torch.argmax(pred, dim=-1)
 		pred_prob = F.softmax(pred, dim=-1) # pred_prob = pred #
 		pred_prob, indices = torch.max(pred_prob, dim=-1)
@@ -111,6 +112,10 @@ def test(Args):
 	train_df = pd.read_csv(Args.path + Args.datasets[0] + '.csv', dtype=str)
 	valid_df = pd.read_csv(Args.path + Args.datasets[1] + '.csv',  dtype=str)
 	test_df = pd.read_csv(Args.path + Args.datasets[1] + '.csv', dtype=str)
+	if Args.relabel_median:
+		for df in (train_df, valid_df, test_df):
+			labels = df['label'].astype(float)
+			df['y'] = (labels > labels.median()).astype(int).astype(str)
 	params = {'batch_size': Args.batch_size,
 			'shuffle': False,
 			'num_workers': 0,

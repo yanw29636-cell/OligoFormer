@@ -1,11 +1,21 @@
+import argparse
+import os
+
+# CUDA_VISIBLE_DEVICES must be set before torch initializes a CUDA context, which
+# happens as a side effect of importing the modules below (they each call
+# torch.cuda.is_available() at import time). Pre-parse just --cuda here so the
+# right physical GPU is already selected by the time those imports run.
+_cuda_pre_parser = argparse.ArgumentParser(add_help=False)
+_cuda_pre_parser.add_argument('--cuda', type=int, default=0)
+_cuda_args, _ = _cuda_pre_parser.parse_known_args()
+os.environ["CUDA_VISIBLE_DEVICES"] = str(_cuda_args.cuda)
+
 from train_single import train_single
 from test_single import test_single
 from test import test
 from train import train
 from infer import infer
 from mismatch import mismatch
-import argparse
-import os
 import warnings
 warnings.filterwarnings("ignore")
 def main():
@@ -25,6 +35,7 @@ def main():
     parser.add_argument('--batch_size',     type=int,   default=16, help='input batch size')
     parser.add_argument('--epoch',          type=int,   default=200, help='number of epochs to train')
     parser.add_argument('--early_stopping', type=int,   default=30, help='early stopping')
+    parser.add_argument('--relabel_median', action='store_true', help='recompute the binary y label per-dataset via its own median(label) split instead of the fixed 0.7 threshold baked into the CSV; mitigates class-prior mismatch when train/val come from different datasets (train.py only)')
     parser.add_argument('--weight_decay',   type=float, default=0.999, help='weight decay')
     parser.add_argument('--kfold',    type=int, default=5, help='K-fold cross validation')
 

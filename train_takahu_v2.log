@@ -1,0 +1,38 @@
+2026-08-29 17:07:46 - INFO - pyTorch!!!
+2026-08-29 17:07:46 - INFO - Number of train: 702
+2026-08-29 17:07:46 - INFO - Number of val: 2361
+2026-08-29 17:07:46 - INFO - Number of test: 2361
+2026-08-29 17:08:23 - INFO - epoch-0, loss-0.0473, val_loss-0.0225, val_acc-0.4972,val_pre-0.4972, val_rec-1.0000, val_rocauc-0.5906, val_prc-0.5424,val_f1-0.6642 ***
+2026-08-29 17:09:03 - INFO - epoch-1, loss-0.0445, val_loss-0.0222, val_acc-0.5680,val_pre-0.5445, val_rec-0.8024, val_rocauc-0.5820, val_prc-0.5376,val_f1-0.6488 ***
+2026-08-29 17:09:41 - INFO - epoch-2, loss-0.0452, val_loss-0.0236, val_acc-0.4972,val_pre-0.4972, val_rec-1.0000, val_rocauc-0.5837, val_prc-0.5402,val_f1-0.6642 ***
+2026-08-29 17:10:19 - INFO - epoch-3, loss-0.0432, val_loss-0.0254, val_acc-0.4972,val_pre-0.4972, val_rec-1.0000, val_rocauc-0.5775, val_prc-0.5334,val_f1-0.6642 ***
+2026-08-29 17:10:56 - INFO - epoch-4, loss-0.0439, val_loss-0.0221, val_acc-0.5510,val_pre-0.5274, val_rec-0.9361, val_rocauc-0.5777, val_prc-0.5339,val_f1-0.6746 ***
+2026-08-29 17:11:30 - INFO - epoch-5, loss-0.0446, val_loss-0.0314, val_acc-0.4972,val_pre-0.4972, val_rec-1.0000, val_rocauc-0.5083, val_prc-0.4728,val_f1-0.6642 ***
+2026-08-29 17:12:08 - INFO - epoch-6, loss-0.0436, val_loss-0.0224, val_acc-0.5502,val_pre-0.5412, val_rec-0.6269, val_rocauc-0.5697, val_prc-0.5267,val_f1-0.5809 ***
+2026-08-29 17:12:47 - INFO - epoch-7, loss-0.0440, val_loss-0.0225, val_acc-0.5409,val_pre-0.5425, val_rec-0.4889, val_rocauc-0.5604, val_prc-0.5192,val_f1-0.5143 ***
+2026-08-29 17:13:23 - INFO - epoch-8, loss-0.0436, val_loss-0.0235, val_acc-0.4972,val_pre-0.4972, val_rec-1.0000, val_rocauc-0.5542, val_prc-0.5120,val_f1-0.6642 ***
+2026-08-29 17:13:58 - INFO - epoch-9, loss-0.0436, val_loss-0.0260, val_acc-0.4972,val_pre-0.4972, val_rec-1.0000, val_rocauc-0.5502, val_prc-0.5074,val_f1-0.6642 ***
+2026-08-29 17:14:35 - INFO - epoch-10, loss-0.0415, val_loss-0.0225, val_acc-0.5133,val_pre-0.5054, val_rec-0.9889, val_rocauc-0.5698, val_prc-0.5270,val_f1-0.6690 ***
+2026-08-29 17:15:10 - INFO - epoch-11, loss-0.0436, val_loss-0.0229, val_acc-0.5006,val_pre-0.4989, val_rec-0.9983, val_rocauc-0.5647, val_prc-0.5220,val_f1-0.6653 ***
+2026-08-29 17:15:46 - INFO - epoch-12, loss-0.0418, val_loss-0.0234, val_acc-0.4968,val_pre-0.4970, val_rec-0.9991, val_rocauc-0.5620, val_prc-0.5176,val_f1-0.6638 ***
+2026-08-29 17:16:22 - INFO - epoch-13, loss-0.0425, val_loss-0.0240, val_acc-0.4972,val_pre-0.4972, val_rec-1.0000, val_rocauc-0.5579, val_prc-0.5161,val_f1-0.6642 ***
+2026-08-29 17:16:59 - INFO - epoch-14, loss-0.0403, val_loss-0.0256, val_acc-0.4972,val_pre-0.4972, val_rec-1.0000, val_rocauc-0.5622, val_prc-0.5165,val_f1-0.6642 ***
+2026-08-29 17:17:35 - INFO - epoch-15, loss-0.0404, val_loss-0.0254, val_acc-0.4917,val_pre-0.4261, val_rec-0.0639, val_rocauc-0.5606, val_prc-0.5184,val_f1-0.1111 ***
+2026-08-29 17:18:13 - INFO - epoch-16, loss-0.0419, val_loss-0.0329, val_acc-0.4972,val_pre-0.4972, val_rec-1.0000, val_rocauc-0.5408, val_prc-0.4974,val_f1-0.6642 ***
+2026-08-29 17:18:51 - INFO - epoch-17, loss-0.0378, val_loss-0.0259, val_acc-0.5083,val_pre-0.5028, val_rec-0.9915, val_rocauc-0.5564, val_prc-0.5144,val_f1-0.6672 ***
+2026-08-29 17:19:27 - INFO - epoch-18, loss-0.0382, val_loss-0.0229, val_acc-0.5409,val_pre-0.5307, val_rec-0.6618, val_rocauc-0.5591, val_prc-0.5171,val_f1-0.5891 ***
+2026-08-29 17:20:03 - INFO - epoch-19, loss-0.0375, val_loss-0.0252, val_acc-0.5430,val_pre-0.5222, val_rec-0.9523, val_rocauc-0.5609, val_prc-0.5176,val_f1-0.6745 ***
+2026-08-29 17:20:41 - INFO - epoch-20, loss-0.0360, val_loss-0.0319, val_acc-0.5044,val_pre-0.5009, val_rec-0.9949, val_rocauc-0.5620, val_prc-0.5148,val_f1-0.6663 ***
+2026-08-29 17:21:20 - INFO - epoch-21, loss-0.0355, val_loss-0.0302, val_acc-0.5260,val_pre-0.5122, val_rec-0.9847, val_rocauc-0.5715, val_prc-0.5230,val_f1-0.6739 ***
+2026-08-29 17:21:59 - INFO - epoch-22, loss-0.0342, val_loss-0.0328, val_acc-0.5163,val_pre-0.5070, val_rec-0.9881, val_rocauc-0.5774, val_prc-0.5286,val_f1-0.6701 ***
+2026-08-29 17:22:38 - INFO - epoch-23, loss-0.0322, val_loss-0.0467, val_acc-0.4994,val_pre-0.4983, val_rec-0.9991, val_rocauc-0.5786, val_prc-0.5219,val_f1-0.6650 ***
+2026-08-29 17:23:16 - INFO - epoch-24, loss-0.0329, val_loss-0.0252, val_acc-0.5824,val_pre-0.5580, val_rec-0.7700, val_rocauc-0.5961, val_prc-0.5483,val_f1-0.6471 ***
+2026-08-29 17:23:53 - INFO - epoch-25, loss-0.0312, val_loss-0.0306, val_acc-0.5561,val_pre-0.5310, val_rec-0.9182, val_rocauc-0.5963, val_prc-0.5458,val_f1-0.6729 ***
+2026-08-29 17:24:27 - INFO - epoch-26, loss-0.0289, val_loss-0.0481, val_acc-0.5133,val_pre-0.5054, val_rec-0.9881, val_rocauc-0.6028, val_prc-0.5473,val_f1-0.6688 ***
+2026-08-29 17:25:04 - INFO - epoch-27, loss-0.0278, val_loss-0.0465, val_acc-0.5337,val_pre-0.5163, val_rec-0.9821, val_rocauc-0.6112, val_prc-0.5599,val_f1-0.6768 ***
+2026-08-29 17:25:40 - INFO - epoch-28, loss-0.0274, val_loss-0.0420, val_acc-0.5476,val_pre-0.5248, val_rec-0.9557, val_rocauc-0.6138, val_prc-0.5590,val_f1-0.6775 ***
+2026-08-29 17:26:16 - INFO - epoch-29, loss-0.0281, val_loss-0.0370, val_acc-0.5714,val_pre-0.5405, val_rec-0.9208, val_rocauc-0.6171, val_prc-0.5732,val_f1-0.6812 ***
+2026-08-29 17:26:54 - INFO - epoch-30, loss-0.0269, val_loss-0.0455, val_acc-0.5519,val_pre-0.5272, val_rec-0.9566, val_rocauc-0.6188, val_prc-0.5657,val_f1-0.6798 ***
+2026-08-29 17:27:32 - INFO - epoch-31, loss-0.0265, val_loss-0.0558, val_acc-0.5332,val_pre-0.5161, val_rec-0.9804, val_rocauc-0.6176, val_prc-0.5705,val_f1-0.6763 ***
+result/20260829_170746_Hu/log/train
+-----------------Start training!-----------------

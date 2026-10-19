@@ -73,10 +73,14 @@ class TokenEmbedding(nn.Embedding):
 class TransformerEmbedding(nn.Module):
     def __init__(self, vocab_size, d_model, max_len):
         super(TransformerEmbedding, self).__init__()
+        # self.tok_emb is constructed but intentionally never called below (x already arrives
+        # pre-embedded from the caller). Kept only so state_dicts saved by this class (including
+        # model/best_model.pth, model/mismatch_model.pth, model/mixhu_best_model.pth) keep loading
+        # via the default strict=True load_state_dict(); wiring it into forward() for real would be
+        # an architecture change requiring every checkpoint to be retrained, not a bugfix.
         self.tok_emb = TokenEmbedding(vocab_size, d_model)
         self.pos_emb = PositionalEncoding(d_model, max_len)
     def forward(self, x):
-        # tok_emb = self.tok_emb(x)
         tok_emb = x
         pos_emb = self.pos_emb(x)
         return tok_emb + pos_emb
@@ -120,16 +124,23 @@ class PositionwiseFeedForward(nn.Module):
         x = self.relu(x)
         x = self.dropout(x)
         x = self.linear2(x)
-        x = self.relu(x)
         x = self.dropout(x)
         return x
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, d_model, n_head):
         super(MultiHeadAttention, self).__init__()
+        if d_model % n_head != 0:
+            raise ValueError(f"d_model ({d_model}) must be divisible by n_head ({n_head})")
         self.n_head = n_head
         self.attention = ScaleDotProductAttention()
         self.w_q = nn.Linear(d_model, d_model)
+        # w_k.bias is mathematically inert: score[i,j] = q_i . (w_k(k_j)) includes a q_i . bias term
+        # that is constant across j (the softmax reduction axis in ScaleDotProductAttention), and
+        # softmax is invariant to a per-row additive constant, so this bias contributes nothing to
+        # the output and gets no useful gradient. Left as bias=True (PyTorch's nn.Linear default)
+        # rather than bias=False so existing checkpoints' attention.w_k.bias key still loads under
+        # the default strict=True load_state_dict().
         self.w_k = nn.Linear(d_model, d_model)
         self.w_v = nn.Linear(d_model, d_model)
         self.w_concat = nn.Linear(d_model, d_model)
@@ -162,11 +173,11 @@ class EncoderLayer(nn.Module):
     def forward(self, embed, src_mask):
         attn,attention = self.attention(q=embed, k=embed, v=embed, mask=src_mask) # 16,19,64
         attn = self.dropout(attn)
-        ln1 = self.norm1(attn) # + embed
+        ln1 = self.norm1(attn + embed)
         ff = self.ffn(ln1)
+        ff = self.dropout(ff)
         ln2 = self.norm2(ff + ln1)
-        ln2 = self.dropout(ln2)
-        return attn, attention
+        return ln2, attention
 
 class Encoder(nn.Module):
     def __init__(self, enc_voc_size, max_len, d_model, ffn_hidden, n_head, n_layers):
@@ -241,14 +252,14 @@ class Oligo(nn.Module):
         self.siRNA_avgpool = nn.AvgPool2d((19, 5))
         self.mRNA_avgpool = nn.AvgPool2d((19 + lm1 + lm2, 5))
         self.classifier = nn.Sequential(
-            nn.Linear(1216 + (19 + lm1 + lm2 - 4) * 64 + 256 + 24,256),
+            nn.Linear(1216 + (19 + lm1 + lm2 - 4) * 64 + 512 + 24,256),
             nn.ReLU(),
             nn.Dropout(0.02),
             nn.Linear(256, 64),
             nn.ReLU(),
             nn.Dropout(0.02),
             nn.Linear(64, 2),
-            nn.Softmax()
+            nn.Softmax(dim=1)
         )
         self.flatten = nn.Flatten()
     def forward(self, siRNA, mRNA, siRNA_FM, mRNA_FM,td):

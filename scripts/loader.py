@@ -68,10 +68,10 @@ class data_process_loader(data.Dataset):
         mRNA = np.expand_dims(mRNA_seq, axis=2).transpose([2, 1, 0])
         # siRNA RNA-FM
         siRNA_seq = self.df.iloc[index]['siRNA']
-        siRNA_FM = np.load(self.root + '/RNAFM/' + self.dataset + '_siRNA/representations/'+ str(self.siRNA_ref[siRNA_seq]) + '.npy')
+        siRNA_FM = np.load(self.root + '/RiNALMo650/' + self.dataset + '_siRNA/representations/'+ str(self.siRNA_ref[siRNA_seq]) + '.npy')
         # mRNA RNA-FM
         mRNA_seq = self.df.iloc[index]['mRNA']
-        mRNA_FM = np.load(self.root + '/RNAFM/' + self.dataset + '_mRNA/representations/' + str(self.mRNA_ref[mRNA_seq])+'.npy') 
+        mRNA_FM = np.load(self.root + '/RiNALMo650/' + self.dataset + '_mRNA/representations/' + str(self.mRNA_ref[mRNA_seq])+'.npy') 
         td = self.df.iloc[index]['td']
         td = torch.tensor([float(i) for i in td.split(',')])
         return  siRNA, mRNA, siRNA_FM, mRNA_FM, label, y, td
