@@ -1,4 +1,12 @@
 import numpy as np
+from sklearn.metrics import precision_recall_curve
+
+
+def find_best_f1_threshold(label, prob):
+    precision, recall, thresholds = precision_recall_curve(label, prob)
+    f1_scores = 2 * precision[:-1] * recall[:-1] / (precision[:-1] + recall[:-1] + 1e-12)
+    best_idx = np.argmax(f1_scores)
+    return thresholds[best_idx]
 
 
 def positive(y_true):

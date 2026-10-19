@@ -8,11 +8,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from loader import data_process_loader
+from loader import data_process_loader, FM_DIMS
 from torch.utils.data import DataLoader
 from model import Oligo
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score, roc_auc_score, average_precision_score,roc_curve,auc,precision_recall_curve,matthews_corrcoef
-from metrics import  sensitivity, specificity
+from metrics import  sensitivity, specificity, find_best_f1_threshold
 from sklearn.utils import shuffle
 from logger import TrainLogger
 import warnings
@@ -71,9 +71,9 @@ class AverageMeter(object):
         return self.avg
 
 def val(model, criterion, dataloader):
+	model.eval()
 	running_loss = AverageMeter()
 	pred_list = []
-	pred_cls_list = []
 	label_list = []
 	for i, data in enumerate(dataloader):
 		siRNA = data[0].to(device)
@@ -82,20 +82,21 @@ def val(model, criterion, dataloader):
 		mRNA_FM = data[3].to(device)
 		label = data[4].to(device)
 		td = data[6].to(device)
+		y = data[5].to(device)
 		pred,_,_ = model(siRNA,mRNA,siRNA_FM,mRNA_FM,td)
-		loss = criterion(pred[:,1],label.float())
+		loss = criterion(torch.log(pred.clamp(min=1e-8)), y.long())
 		label = data[5]
-		pred_cls = torch.argmax(pred, dim=-1)
 		pred_prob = F.softmax(pred, dim=-1) # pred_prob = pred #
 		pred_prob, indices = torch.max(pred_prob, dim=-1)
 		pred_prob[indices == 0] = 1. - pred_prob[indices == 0]
 		pred_list.append(pred_prob.view(-1).detach().cpu().numpy())
-		pred_cls_list.append(pred_cls.view(-1).detach().cpu().numpy())
 		label_list.append(label)
 		running_loss.update(loss, label.shape[0])
 	pred = np.concatenate(pred_list, axis=0)
-	pred_cls = np.concatenate(pred_cls_list, axis=0)
 	label = np.concatenate(label_list, axis=0)
+	# calibrate the decision threshold on this validation set instead of a naive 0.5/argmax cutoff
+	best_threshold = find_best_f1_threshold(label, pred)
+	pred_cls = (pred >= best_threshold).astype(int)
 	acc = accuracy_score(label, pred_cls)
 	sen = sensitivity(label,pred_cls)
 	spe = specificity(label,pred_cls)
@@ -109,6 +110,7 @@ def val(model, criterion, dataloader):
 	mcc=matthews_corrcoef(label,pred_cls)
 	epoch_loss = running_loss.get_average()
 	running_loss.reset()
+	model.train()
 	return epoch_loss, acc, sen, spe, pre, rec, f1score, rocauc, prauc, mcc, label, pred, pd.concat((pd.Series(fpr),pd.Series(tpr)),axis = 1) , pd.concat((pd.Series(precision),pd.Series(recall)),axis = 1)
 
 def train_single(Args):
@@ -116,6 +118,8 @@ def train_single(Args):
 	random.seed(Args.seed)
 	os.environ['PYTHONHASHSEED']=str(Args.seed)
 	np.random.seed(Args.seed)
+	torch.manual_seed(Args.seed)
+	torch.cuda.manual_seed_all(Args.seed)
 	params = dict(
 		data_root=Args.path,
 		save_dir=Args.output_dir,
@@ -123,9 +127,18 @@ def train_single(Args):
 		batch_size=Args.batch_size
 	)
 	logger = TrainLogger(params)
-	dataset = pd.read_csv(Args.path + Args.datasets[0] + '.csv', dtype=str) 
+	dataset = pd.read_csv(Args.path + Args.datasets[0] + '.csv', dtype=str)
 	dataset = shuffle_dataset(dataset, Args.seed)
 	test_df = pd.read_csv(Args.path + Args.datasets[1] + '.csv', dtype=str)
+	if Args.relabel_median:
+		for df in (dataset, test_df):
+			labels = df['label'].astype(float)
+			df['y'] = (labels > labels.median()).astype(int).astype(str)
+	if Args.embedding_source == 'rinalmo':
+		if not os.path.exists('./data/RiNALMo'):
+			os.system('bash scripts/RiNALMo-features.sh')
+	elif not os.path.exists('./data/RNAFM'):
+		os.system('bash scripts/RNA-FM-features.sh')
 	for i_fold in range(Args.kfold):
 		logger.info('*' * 50 + 'No.' + str(i_fold) + '-fold' + '*' * 50)
 		train_df, valid_df = get_kfold_data_2(i_fold, dataset, Args.kfold)
@@ -133,18 +146,18 @@ def train_single(Args):
 				'shuffle': True,
 				'num_workers': 0,
 				'drop_last': False}
-		train_ds = DataLoader(data_process_loader(train_df.index.values, train_df.label.values,train_df.y.values, train_df, Args.datasets[0],Args.path), **params)
-		valid_ds = DataLoader(data_process_loader(valid_df.index.values, valid_df.label.values,valid_df.y.values, valid_df, Args.datasets[0],Args.path),**params)
-		test_ds = DataLoader(data_process_loader(test_df.index.values, test_df.label.values,test_df.y.values, test_df, Args.datasets[1],Args.path), **params)
-		OFmodel = Oligo(vocab_size = Args.vocab_size, embedding_dim = Args.embedding_dim, lstm_dim = Args.lstm_dim,  n_head = Args.n_head, n_layers = Args.n_layers, lm1 = Args.lm1, lm2 = Args.lm2).to(device)
+		train_ds = DataLoader(data_process_loader(train_df.index.values, train_df.label.values,train_df.y.values, train_df, Args.datasets[0],Args.path, Args.embedding_source), **params)
+		valid_ds = DataLoader(data_process_loader(valid_df.index.values, valid_df.label.values,valid_df.y.values, valid_df, Args.datasets[0],Args.path, Args.embedding_source),**params)
+		test_ds = DataLoader(data_process_loader(test_df.index.values, test_df.label.values,test_df.y.values, test_df, Args.datasets[1],Args.path, Args.embedding_source), **params)
+		OFmodel = Oligo(vocab_size = Args.vocab_size, embedding_dim = Args.embedding_dim, lstm_dim = Args.lstm_dim,  n_head = Args.n_head, n_layers = Args.n_layers, lm1 = Args.lm1, lm2 = Args.lm2, fm_dim = FM_DIMS[Args.embedding_source], lstm_batch_first = Args.lstm_batch_first).to(device)
 		if Args.resume is not None:
 			OFmodel.load_state_dict(torch.load(Args.resume,map_location=device))
-		criterion = nn.MSELoss() 
+		criterion = nn.NLLLoss()
 		best_AUC = 0.0
 		best_loss = 1e10
 		best_epoch = 0
 		tolerence_epoch = Args.early_stopping
-		optimizer = optim.Adam(OFmodel.parameters(), lr=Args.learning_rate)
+		optimizer = optim.Adam(OFmodel.parameters(), lr=Args.learning_rate, weight_decay=Args.l2_decay)
 		scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer,gamma = Args.weight_decay)
 		logger.info(f"Number of train: {train_df.shape[0]}")
 		logger.info(f"Number of val: {valid_df.shape[0]}")
@@ -159,8 +172,9 @@ def train_single(Args):
 				mRNA_FM = data[3].to(device)
 				label = data[4].to(device)
 				td = data[6].to(device)
+				y = data[5].to(device)
 				output,_,_ = OFmodel(siRNA,mRNA,siRNA_FM,mRNA_FM,td)
-				loss = criterion(output[:,1],label.float()) # 
+				loss = criterion(torch.log(output.clamp(min=1e-8)), y.long())
 				optimizer.zero_grad()
 				loss.backward()
 				running_loss.update(loss, output.shape[0])

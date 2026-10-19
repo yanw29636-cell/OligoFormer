@@ -25,14 +25,18 @@ def Embed(RNA):
     return [char_to_int[i] for i in RNA]
 
 
+EMBEDDING_DIRS = {'rnafm': 'RNAFM', 'rinalmo': 'RiNALMo'}
+FM_DIMS = {'rnafm': 640, 'rinalmo': 1280}  # hidden size of the pretrained embedding, for Oligo(fm_dim=...)
+
 class data_process_loader(data.Dataset):
-    def __init__(self, df_index, labels, y, df, dataset,root):
+    def __init__(self, df_index, labels, y, df, dataset, root, embedding_source='rnafm'):
         'Initialization'
         self.labels = labels
         self.df_index = df_index
         self.y = y
         self.df = df
         self.dataset = dataset
+        self.embedding_dir = EMBEDDING_DIRS[embedding_source]
         self.siRNA_ref = {}
         self.root = root
         with open(root + '/fasta/' + self.dataset + '_siRNA.fa') as f:
@@ -66,12 +70,12 @@ class data_process_loader(data.Dataset):
         mRNA_seq = [*mRNA_seq]
         mRNA_seq = sequence_OneHot(mRNA_seq)
         mRNA = np.expand_dims(mRNA_seq, axis=2).transpose([2, 1, 0])
-        # siRNA RNA-FM
+        # siRNA embedding (RNA-FM or RiNALMo, per embedding_source)
         siRNA_seq = self.df.iloc[index]['siRNA']
-        siRNA_FM = np.load(self.root + '/RNAFM/' + self.dataset + '_siRNA/representations/'+ str(self.siRNA_ref[siRNA_seq]) + '.npy')
-        # mRNA RNA-FM
+        siRNA_FM = np.load(self.root + '/' + self.embedding_dir + '/' + self.dataset + '_siRNA/representations/'+ str(self.siRNA_ref[siRNA_seq]) + '.npy')
+        # mRNA embedding (RNA-FM or RiNALMo, per embedding_source)
         mRNA_seq = self.df.iloc[index]['mRNA']
-        mRNA_FM = np.load(self.root + '/RNAFM/' + self.dataset + '_mRNA/representations/' + str(self.mRNA_ref[mRNA_seq])+'.npy') 
+        mRNA_FM = np.load(self.root + '/' + self.embedding_dir + '/' + self.dataset + '_mRNA/representations/' + str(self.mRNA_ref[mRNA_seq])+'.npy')
         td = self.df.iloc[index]['td']
         td = torch.tensor([float(i) for i in td.split(',')])
         return  siRNA, mRNA, siRNA_FM, mRNA_FM, label, y, td
