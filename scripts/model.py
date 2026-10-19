@@ -73,10 +73,14 @@ class TokenEmbedding(nn.Embedding):
 class TransformerEmbedding(nn.Module):
     def __init__(self, vocab_size, d_model, max_len):
         super(TransformerEmbedding, self).__init__()
+        # self.tok_emb is constructed but intentionally never called below (x already arrives
+        # pre-embedded from the caller). Kept only so state_dicts saved by this class (including
+        # model/best_model.pth, model/mismatch_model.pth, model/mixhu_best_model.pth) keep loading
+        # via the default strict=True load_state_dict(); wiring it into forward() for real would be
+        # an architecture change requiring every checkpoint to be retrained, not a bugfix.
         self.tok_emb = TokenEmbedding(vocab_size, d_model)
         self.pos_emb = PositionalEncoding(d_model, max_len)
     def forward(self, x):
-        # tok_emb = self.tok_emb(x)
         tok_emb = x
         pos_emb = self.pos_emb(x)
         return tok_emb + pos_emb
@@ -120,16 +124,23 @@ class PositionwiseFeedForward(nn.Module):
         x = self.relu(x)
         x = self.dropout(x)
         x = self.linear2(x)
-        x = self.relu(x)
         x = self.dropout(x)
         return x
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, d_model, n_head):
         super(MultiHeadAttention, self).__init__()
+        if d_model % n_head != 0:
+            raise ValueError(f"d_model ({d_model}) must be divisible by n_head ({n_head})")
         self.n_head = n_head
         self.attention = ScaleDotProductAttention()
         self.w_q = nn.Linear(d_model, d_model)
+        # w_k.bias is mathematically inert: score[i,j] = q_i . (w_k(k_j)) includes a q_i . bias term
+        # that is constant across j (the softmax reduction axis in ScaleDotProductAttention), and
+        # softmax is invariant to a per-row additive constant, so this bias contributes nothing to
+        # the output and gets no useful gradient. Left as bias=True (PyTorch's nn.Linear default)
+        # rather than bias=False so existing checkpoints' attention.w_k.bias key still loads under
+        # the default strict=True load_state_dict().
         self.w_k = nn.Linear(d_model, d_model)
         self.w_v = nn.Linear(d_model, d_model)
         self.w_concat = nn.Linear(d_model, d_model)
@@ -162,11 +173,11 @@ class EncoderLayer(nn.Module):
     def forward(self, embed, src_mask):
         attn,attention = self.attention(q=embed, k=embed, v=embed, mask=src_mask) # 16,19,64
         attn = self.dropout(attn)
-        ln1 = self.norm1(attn) # + embed
+        ln1 = self.norm1(attn + embed)
         ff = self.ffn(ln1)
+        ff = self.dropout(ff)
         ln2 = self.norm2(ff + ln1)
-        ln2 = self.dropout(ln2)
-        return attn, attention
+        return ln2, attention
 
 class Encoder(nn.Module):
     def __init__(self, enc_voc_size, max_len, d_model, ffn_hidden, n_head, n_layers):
@@ -180,14 +191,19 @@ class Encoder(nn.Module):
         return x, attention # 16，19，64
 
 class siRNA_Encoder(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, lstm_dim, n_head, n_layers):
+    def __init__(self, vocab_size, embedding_dim, lstm_dim, n_head, n_layers, lstm_batch_first=False):
         super().__init__()
         self.conv2d = nn.Conv2d(1, 64, kernel_size=(1,5), stride=1, padding=0)
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(0.02)
         self.avgpool = nn.AvgPool1d(kernel_size = 2)
         self.maxpool = nn.MaxPool1d(kernel_size = 2)
-        self.biLSTM = nn.LSTM(69,lstm_dim,2,bidirectional = True) # 68
+        # forward() feeds (batch, seq, feat). With batch_first=False (the original, and still the
+        # default so existing checkpoints keep their semantics) torch reads that as
+        # (seq, batch, feat), so the recurrence runs across the samples in a batch and the 19
+        # nucleotide positions become the batch -- see CLAUDE.md. Output shape is (16,19,64)
+        # either way, so nothing downstream changes and state_dicts stay loadable.
+        self.biLSTM = nn.LSTM(69,lstm_dim,2,bidirectional = True, batch_first = lstm_batch_first) # 68
         self.encoder = Encoder(vocab_size,19,lstm_dim*2,embedding_dim,n_head,n_layers)
 
     def forward(self, x):
@@ -207,14 +223,14 @@ class siRNA_Encoder(nn.Module):
         return x, attention
 
 class mRNA_Encoder(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, lstm_dim, n_head, n_layers, lm1,lm2):
+    def __init__(self, vocab_size, embedding_dim, lstm_dim, n_head, n_layers, lm1,lm2, lstm_batch_first=False):
         super().__init__()
         self.conv2d = nn.Conv2d(1, 64, kernel_size=(5,5), stride=1, padding=0)
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(0.02)
         self.avgpool = nn.AvgPool1d(kernel_size = 2) #2
         self.maxpool = nn.MaxPool1d(kernel_size = 2) #2
-        self.biLSTM = nn.LSTM(64,lstm_dim,2,bidirectional = True) # 68
+        self.biLSTM = nn.LSTM(64,lstm_dim,2,bidirectional = True, batch_first = lstm_batch_first) # 68
         self.encoder = Encoder(vocab_size,19 + lm1 + lm2,lstm_dim*2,embedding_dim,n_head,n_layers)
 
     def forward(self, x):
@@ -234,21 +250,25 @@ class mRNA_Encoder(nn.Module):
         return x, attention
 
 class Oligo(nn.Module):
-    def __init__(self, vocab_size = 26, embedding_dim = 128, lstm_dim = 32,  n_head = 8, n_layers = 1, lm1 = 19, lm2 = 19): # 4928
+    def __init__(self, vocab_size = 26, embedding_dim = 128, lstm_dim = 32,  n_head = 8, n_layers = 1, lm1 = 19, lm2 = 19, fm_dim = 640, lstm_batch_first = False): # 4928
         super().__init__()
-        self.siRNA_encoder = siRNA_Encoder(vocab_size, embedding_dim, lstm_dim, n_head, n_layers)
-        self.mRNA_encoder = mRNA_Encoder(vocab_size, embedding_dim, lstm_dim, n_head, n_layers, lm1, lm2)
+        # fm_dim is the pretrained embedding's hidden size (RNA-FM / RiNALMo-150M: 640,
+        # RiNALMo-650M: 1280). The siRNA/mRNA avgpool below groups every 5 embedding
+        # channels together, so it always divides evenly and needs no change; only the
+        # classifier's input width (2 pooled streams of fm_dim // 5 each) depends on it.
+        self.siRNA_encoder = siRNA_Encoder(vocab_size, embedding_dim, lstm_dim, n_head, n_layers, lstm_batch_first)
+        self.mRNA_encoder = mRNA_Encoder(vocab_size, embedding_dim, lstm_dim, n_head, n_layers, lm1, lm2, lstm_batch_first)
         self.siRNA_avgpool = nn.AvgPool2d((19, 5))
         self.mRNA_avgpool = nn.AvgPool2d((19 + lm1 + lm2, 5))
         self.classifier = nn.Sequential(
-            nn.Linear(1216 + (19 + lm1 + lm2 - 4) * 64 + 256 + 24,256),
+            nn.Linear(1216 + (19 + lm1 + lm2 - 4) * 64 + 2 * (fm_dim // 5) + 24,256),
             nn.ReLU(),
             nn.Dropout(0.02),
             nn.Linear(256, 64),
             nn.ReLU(),
             nn.Dropout(0.02),
             nn.Linear(64, 2),
-            nn.Softmax()
+            nn.Softmax(dim=1)
         )
         self.flatten = nn.Flatten()
     def forward(self, siRNA, mRNA, siRNA_FM, mRNA_FM,td):
